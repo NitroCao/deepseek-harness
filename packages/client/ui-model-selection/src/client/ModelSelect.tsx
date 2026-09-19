@@ -373,6 +373,11 @@ export function ModelSelect(
           role="menu"
           aria-label={t('menu.aria')}
           aria-busy={state.status === 'loading' || busy}
+          onMouseDown={(event) => {
+            // WebKit blurs the focused row without focusing a pressed button;
+            // keep focus so onBlur cannot unmount the menu before its click.
+            if (event.target instanceof Element && event.target.closest('button') !== null) event.preventDefault()
+          }}
         >
           {pane === 'root' && (
             <>

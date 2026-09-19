@@ -207,6 +207,37 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
   })
 
+  it.each(['model', 'effort'] as const)('keeps focus through the %s button press until its click selects', async (pane) => {
+    const groups = [...state().groups, {
+      id: 'zai', name: 'ZAI', models: [{ id: 'glm-4.7', name: 'GLM-4.7' }],
+    }]
+    const select = vi.fn().mockResolvedValue({ ok: true, value: undefined })
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={createSnapshotStore(state({ groups }))}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: pane === 'model' ? /^模型/ : /推理等级/ }))
+    const focused = document.activeElement
+    const row = screen.getByRole('menuitemradio', { name: pane === 'model' ? 'GLM-4.7' : 'Max' })
+    // jsdom has no native focus default; cancelling mousedown prevents WebKit's
+    // null-destination blur from unmounting the row before its click.
+    expect(fireEvent.mouseDown(row.firstElementChild!)).toBe(false)
+    expect(document.activeElement).toBe(focused)
+    fireEvent.mouseUp(row)
+    fireEvent.click(row)
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith(pane === 'model'
+        ? { provider: 'zai', model: 'glm-4.7' }
+        : { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max' })
+      expect(screen.queryByRole('menu')).toBeNull()
+    })
+  })
+
   it('portals the placed menu card to body and closes only on truly-outside mousedown', () => {
     const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')!
     const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')!
@@ -232,7 +263,7 @@ describe('ModelSelect reasoning effort', () => {
       expect(menu.style.left).toBe('12px')
       expect(menu.style.top).toBe('12px')
       // Interactions inside the trigger subtree or the portaled card stay open.
-      fireEvent.mouseDown(menu)
+      expect(fireEvent.mouseDown(menu)).toBe(true)
       fireEvent.mouseDown(trigger)
       fireEvent.blur(trigger, { relatedTarget: menu })
       expect(screen.getByRole('menu')).toBeTruthy()
